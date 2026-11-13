@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#183d32">
+  <title>FoodWise — Eat before it expires</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="supabase-config.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main id="auth-screen" class="auth-screen" aria-live="polite">
+    <section class="auth-card" aria-labelledby="auth-title">
+      <a class="brand auth-brand" href="#" aria-label="FoodWise"><span class="brand-mark">f</span><span>foodwise<span class="brand-dot">.</span></span></a>
+      <div id="auth-loading" class="auth-state"><span class="auth-spinner" aria-hidden="true"></span><span>Checking your session…</span></div>
+      <div id="auth-form-panel" hidden>
+        <div class="eyebrow">YOUR KITCHEN, YOURS</div>
+        <h1 id="auth-title">Welcome back</h1>
+        <p id="auth-description" class="subtitle">Sign in to continue to FoodWise.</p>
+        <form id="auth-form" class="auth-form" novalidate>
+          <label class="field">Email address<input id="auth-email" name="email" type="email" autocomplete="email" required></label>
+          <label class="field">Password<input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="6" required></label>
+          <button id="auth-submit" class="button button-primary auth-submit" type="submit">Sign in <span>→</span></button>
+        </form>
+        <p class="auth-switch-line"><span id="auth-switch-copy">New to FoodWise?</span> <button id="auth-mode-toggle" class="auth-mode-toggle" type="button">Create an account</button></p>
+        <p class="auth-phone-note">Phone sign-in is disabled until SMS setup is complete.</p>
+      </div>
+      <p id="auth-message" class="auth-message" role="status" hidden></p>
+      <p id="auth-error" class="auth-error" role="alert" hidden></p>
+    </section>
+  </main>
+  <div class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard" data-page="dashboard" aria-label="FoodWise dashboard"><span class="brand-mark">f</span><span>foodwise<span class="brand-dot">.</span></span></a>
+      <div class="side-label">WORKSPACE</div>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="#dashboard" data-page="dashboard" class="nav-link active"><span>⌂</span> Dashboard</a>
+        <a href="#inventory" data-page="inventory" class="nav-link"><span>▦</span> My inventory <b id="nav-count">0</b></a>
+        <a href="#use-first" data-page="use-first" class="nav-link"><span>↗</span> Use it first</a>
+        <a href="#history" data-page="history" class="nav-link"><span>◷</span> Waste summary</a>
+      </nav>
+      <div class="sidebar-bottom"><div class="sidebar-tip"><span class="tip-icon">✳</span><strong>A little less waste<br>goes a long way.</strong><p>Small choices in your kitchen add up to a better planet.</p><span class="tip-leaf">✿</span></div><div class="sidebar-footer">Made for mindful kitchens <span>♥</span></div></div>
+    </aside>
+    <main class="main-content">
+      <header class="topbar"><div class="mobile-brand"><span class="brand-mark">f</span> foodwise<span class="brand-dot">.</span></div><div class="topbar-date" id="today-label"></div><span id="auth-user-label" class="auth-user-label"></span><button class="button button-quiet sign-out-button" id="sign-out" type="button">Sign out</button><button class="button button-primary" id="add-item-top"><span>＋</span> Add food</button></header>
+      <div id="local-data-notice" class="local-data-notice" role="status" hidden>Your local inventory is temporarily unavailable because its account ownership has not been established. The original browser data is preserved and has not been changed.</div>
+      <div id="page-dashboard" class="page active">
+        <section class="welcome-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> YOUR KITCHEN, AT A GLANCE</div><h1>Good morning<span class="title-leaf">✳</span></h1><p class="subtitle">A little planning today means less waste tomorrow.</p></div><button class="text-button" id="load-demo">✦ Load demo data</button></section>
+        <section class="stats-grid" aria-label="Inventory overview">
+          <article class="stat-card stat-green"><div class="stat-top"><span>Active items</span><span class="stat-icon">▦</span></div><div class="stat-value" id="stat-active">0</div><div class="stat-foot">in your kitchen</div><div class="stat-decoration">▦</div></article>
+          <article class="stat-card stat-yellow"><div class="stat-top"><span>Expiring soon</span><span class="stat-icon">◷</span></div><div class="stat-value" id="stat-soon">0</div><div class="stat-foot">use in the next 3 days</div><div class="stat-decoration">◷</div></article>
+          <article class="stat-card stat-red"><div class="stat-top"><span>Expired</span><span class="stat-icon">!</span></div><div class="stat-value" id="stat-expired">0</div><div class="stat-foot">need your attention</div><div class="stat-decoration">!</div></article>
+          <article class="stat-card stat-lime"><div class="stat-top"><span>Consumed</span><span class="stat-icon">✓</span></div><div class="stat-value" id="stat-consumed">0</div><div class="stat-foot">items enjoyed so far</div><div class="stat-decoration">✓</div></article>
+        </section>
+        <section class="dashboard-grid"><article class="panel attention-panel"><div class="panel-heading"><div><div class="eyebrow">DON'T LET IT GO TO WASTE</div><h2>Needs your attention <span class="heading-count" id="attention-count">0</span></h2></div><a href="#inventory" data-page="inventory" class="subtle-link">See all <span>→</span></a></div><div id="attention-list" class="attention-list"></div></article>
+          <article class="panel quick-panel"><div class="quick-orbit">✳</div><div class="eyebrow">A FRESH START</div><h2>What’s in your<br>kitchen today?</h2><p>Add what you have on hand and we’ll help you keep track.</p><button class="button button-dark" id="add-item-quick">＋ Add your first item</button><div class="quick-doodle">⌁</div></article></section>
+        <section class="bottom-note"><span>✿</span><div><strong>Eat before it expires. Save food. Save money.</strong><p>FoodWise helps you make the most of every ingredient.</p></div><span class="note-sun">☼</span></section>
+      </div>
+      <div id="page-inventory" class="page">
+        <section class="page-heading"><div><div class="eyebrow">YOUR KITCHEN</div><h1>My inventory</h1><p class="subtitle">Everything you have, all in one place.</p></div><button class="button button-primary" id="add-item-inventory">＋ Add food</button></section>
+        <section class="panel inventory-panel"><div class="inventory-toolbar"><label class="search-box"><span>⌕</span><input id="search-input" type="search" placeholder="Search your food…" aria-label="Search food"></label><label class="select-wrap"><span class="sr-only">Filter by category</span><select id="category-filter"><option value="">All categories</option></select></label><label class="select-wrap"><span class="sr-only">Filter by status</span><select id="status-filter"><option value="">All statuses</option><option value="fresh">Fresh</option><option value="soon">Expiring soon</option><option value="expired">Expired</option></select></label><label class="select-wrap sort-wrap"><span class="sr-only">Sort inventory</span><select id="sort-select"><option value="expiry-asc">Soonest expiry</option><option value="expiry-desc">Latest expiry</option><option value="name-asc">Name A–Z</option></select></label></div><div id="inventory-list"></div></section>
+      </div>
+      <div id="page-use-first" class="page"><section class="page-heading"><div><div class="eyebrow">A LITTLE HEAD START</div><h1>Use it first <span class="title-leaf">✳</span></h1><p class="subtitle">Your soonest-expiring ingredients, right at the top.</p></div></section><div id="use-first-list" class="use-first-grid"></div></div>
+      <div id="page-history" class="page"><section class="page-heading"><div><div class="eyebrow">YOUR FOOD JOURNEY</div><h1>Waste summary</h1><p class="subtitle">Every meal made and ingredient saved tells a story.</p></div><button class="text-button" id="reset-data">↻ Reset all data</button></section><section class="history-summary"><article class="panel history-chart-panel"><div class="eyebrow">A QUICK LOOK</div><h2>Consumed vs. wasted</h2><div id="chart-area" class="chart-area"></div></article><article class="panel waste-value-panel"><div class="value-flower">✳</div><div class="eyebrow">ESTIMATED WASTE VALUE</div><div class="value-amount" id="waste-value">฿0</div><p>Based on purchase prices you’ve recorded for wasted items.</p><span class="value-caption">Every little bit counts.</span></article></section><section class="panel history-panel"><div class="panel-heading"><div><div class="eyebrow">THE FULL STORY</div><h2>Item history</h2></div></div><div id="history-list"></div></section></div>
+      <footer class="app-footer">FoodWise <span>•</span> Eat before it expires. Save food. Save money.</footer>
+    </main>
+  </div>
+  <div id="item-modal" class="modal" aria-hidden="true"><div class="modal-backdrop" data-close-modal></div><section class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title"><button class="modal-close" data-close-modal aria-label="Close">×</button><div class="eyebrow">MAKE IT COUNT</div><h2 id="modal-title">Add food</h2><p class="modal-intro">Keep your kitchen in the know.</p><form id="item-form" novalidate><input id="item-id" type="hidden"><div class="form-grid"><label class="field field-full">Food name <span class="required">*</span><input id="food-name" name="name" maxlength="80" placeholder="e.g. Avocados" required><small class="field-error" data-error="name"></small></label><label class="field">Category <span class="required">*</span><select id="food-category" name="category" required></select><small class="field-error" data-error="category"></small></label><label class="field">Quantity <span class="required">*</span><input id="food-quantity" name="quantity" type="number" min="0.01" step="any" placeholder="e.g. 3" required><small class="field-error" data-error="quantity"></small></label><label class="field">Unit <span class="required">*</span><select id="food-unit" name="unit" required><option value="">Choose unit</option><option>pcs</option><option>kg</option><option>g</option><option>L</option><option>ml</option><option>packs</option><option>bunches</option><option>boxes</option><option>servings</option></select><small class="field-error" data-error="unit"></small></label><label class="field">Expires on <span class="required">*</span><input id="food-expiry" name="expiryDate" type="date" required><small class="field-error" data-error="expiryDate"></small></label><label class="field">Purchase date <span class="optional">optional</span><input id="food-purchase-date" name="purchaseDate" type="date"><small class="field-error" data-error="purchaseDate"></small></label><label class="field">Purchase price <span class="optional">optional · ฿</span><input id="food-price" name="price" type="number" min="0" step="0.01" placeholder="e.g. 89"><small class="field-error" data-error="price"></small></label></div><div class="form-actions"><button class="button button-quiet" type="button" data-close-modal>Cancel</button><button class="button button-primary" type="submit" id="save-item">Add to inventory <span>→</span></button></div></form></section></div>
+  <div id="toast-region" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+</body>
+</html>
