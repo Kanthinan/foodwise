@@ -83,3 +83,7 @@ Before presenting, test in two separate accounts: add, edit, and delete an item;
 - Food inventory and history require a working network connection and the authenticated Supabase account. The database RLS policies are essential to account isolation.
 - Waste value is an estimate based only on recorded purchase prices for wasted items; missing prices are treated as zero.
 - The comparison chart summarizes recorded item counts, not portion sizes or actual environmental impact.
+
+
+
+**Live Website:** https://kanthinan.github.io/foodwise/
