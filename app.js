@@ -30,10 +30,16 @@
   let startedLoadGeneration=-1;
   let authMode='signin';
   let authEventVersion=0;
+  let authInitializationAttempt=0;
+  let authInitializationPending=false;
+  let authInitializationTimer=null;
+  let authListenerRegistered=false;
+  let retryAction=null;
+  const AUTH_INITIALIZATION_TIMEOUT_MS=15000;
   function mapItem(row) { return {id:String(row.id),name:row.name,category:row.category,quantity:Number(row.quantity),unit:row.unit,purchaseDate:row.purchase_date||'',expiryDate:row.expiry_date,price:row.price==null?'':Number(row.price),status:expiryStatus({expiryDate:row.expiry_date}),updatedAt:row.updated_at||''}; }
   function mapHistory(row) { const expiryDate=row.item_expiry_date||''; return {item:{id:row.legacy_item_id||String(row.food_item_id??row.id),name:row.item_name,category:row.item_category,quantity:Number(row.item_quantity),unit:row.item_unit,purchaseDate:row.item_purchase_date||'',expiryDate,price:row.item_price==null?'':Number(row.item_price),status:expiryStatus({expiryDate}),updatedAt:row.item_updated_at||''},outcome:row.outcome,recordedAt:row.recorded_at,recordedDate:row.recorded_date}; }
   function itemPayload(values) { return {name:values.name,category:values.category,quantity:Number(values.quantity),unit:values.unit,purchase_date:values.purchaseDate||null,expiry_date:values.expiryDate,price:values.price===''?null:Number(values.price),updated_at:new Date().toISOString()}; }
-  function showCloudStatus(message,{loading=false,retry=false}={}) { showAuthState({loading,configurationError:true,error:loading?'':message,loadingMessage:message,retry}); }
+  function showCloudStatus(message,{loading=false,retry=false}={}) { showAuthState({loading,configurationError:true,error:loading?'':message,loadingMessage:message,retryAction:retry?'cloud':null}); }
   function currentRequest(userId,generation) { return currentUserId===userId&&authGeneration===generation; }
   async function loadUserRows(table,columns,userId,orderColumn,ascending) {
     const rows=[],pageSize=500;
@@ -168,7 +174,7 @@
       if(currentRequest(userId,generation))await writeSucceededRefresh(userId,generation,'Your account inventory and history have been reset.');
     } catch(error) { if(currentRequest(userId,generation)){await refreshAccountData(userId,generation);await showDataError(error,'Reset did not complete fully. The account data shown has been refreshed.');} }
   }
-  function showAuthState({loading=false,message='',error='',configurationError=false,loadingMessage='Checking your session…',retry=false}={}) {
+  function showAuthState({loading=false,message='',error='',configurationError=false,loadingMessage='Checking your session…',retry=false,retryAction:nextRetryAction=null,retryLabel=''}={}) {
     const app=document.querySelector('.app-shell');
     app.hidden=true;
     $('auth-screen').hidden=false;
@@ -179,7 +185,9 @@
     $('auth-message').textContent=message;
     $('auth-error').hidden=!error;
     $('auth-error').textContent=error;
-    $('retry-cloud-load').hidden=!retry;
+    retryAction=nextRetryAction||(retry?'cloud':null);
+    $('retry-cloud-load').hidden=!retryAction;
+    $('retry-cloud-load').textContent=retryLabel||(retryAction==='session'?'Try Again':'Retry loading data');
   }
   function setAuthMode(mode) {
     authMode=mode;
@@ -192,7 +200,35 @@
     $('auth-password').autocomplete=signingUp?'new-password':'current-password';
     showAuthState();
   }
+  function completeAuthInitializationAttempt() {
+    if(!authInitializationPending)return;
+    authInitializationPending=false;
+    if(authInitializationTimer){clearTimeout(authInitializationTimer);authInitializationTimer=null;}
+  }
+  function failAuthInitializationAttempt(attempt,message) {
+    if(attempt!==authInitializationAttempt||!authInitializationPending)return;
+    completeAuthInitializationAttempt();
+    showAuthState({configurationError:true,error:message,retryAction:'session',retryLabel:'Try Again'});
+  }
+  function beginAuthInitializationAttempt() {
+    const attempt=++authInitializationAttempt,observedVersion=authEventVersion;
+    authInitializationPending=true;
+    showAuthState({loading:true,loadingMessage:'Checking your session…'});
+    authInitializationTimer=setTimeout(()=>{
+      failAuthInitializationAttempt(attempt,'FoodWise could not finish checking your session within 15 seconds. Check your connection and try again.');
+    },AUTH_INITIALIZATION_TIMEOUT_MS);
+    Promise.resolve().then(()=>supabaseClient.auth.getSession()).then(({data:sessionData,error})=>{
+      if(attempt!==authInitializationAttempt||!authInitializationPending)return;
+      // An auth event has already taken responsibility for this attempt.
+      // Its deferred handler will complete initialization and clear the timer.
+      if(authEventVersion!==observedVersion)return;
+      if(error){failAuthInitializationAttempt(attempt,'Could not restore your session. Check your connection and try again.');return;}
+      completeAuthInitializationAttempt();
+      handleAuthState('INITIAL_SESSION',sessionData.session);
+    }).catch(()=>failAuthInitializationAttempt(attempt,'Could not restore your session. Check your connection and try again.'));
+  }
   function handleAuthState(event,session) {
+    completeAuthInitializationAttempt();
     if(authCallbackPending) {
       // The Supabase client has now restored or rejected the URL callback.
       // Only now is it safe for app navigation to replace its token fragment.
@@ -254,26 +290,24 @@
       return;
     }
     try {
-      supabaseClient=window.supabase.createClient(url,key);
-      const subscription=supabaseClient.auth.onAuthStateChange((event,session)=>{
-        authEventVersion++;
-        setTimeout(()=>handleAuthState(event,session),0);
-      });
-      const observedVersion=authEventVersion;
-      supabaseClient.auth.getSession().then(({data:sessionData,error})=>{
-        if(authEventVersion!==observedVersion)return;
-        if(error) {
-          showAuthState({error:'Could not restore your session. Please try signing in again.'});
-          return;
-        }
-        handleAuthState('INITIAL_SESSION',sessionData.session);
-      }).catch(()=>showAuthState({error:'Could not restore your session. Please try signing in again.'}));
-      // Keep a reference so the subscription remains easy to dispose if the
-      // page later gains a reinitialization flow.
-      window.foodwiseAuthSubscription=subscription.data.subscription;
+      if(!supabaseClient)supabaseClient=window.supabase.createClient(url,key);
+      if(!authListenerRegistered) {
+        const subscription=supabaseClient.auth.onAuthStateChange((event,session)=>{
+          authEventVersion++;
+          setTimeout(()=>handleAuthState(event,session),0);
+        });
+        authListenerRegistered=true;
+        // Retain the one subscription so retries never register another.
+        window.foodwiseAuthSubscription=subscription.data.subscription;
+      }
+      beginAuthInitializationAttempt();
     } catch {
       showAuthState({configurationError:true,error:'FoodWise could not initialize Supabase authentication. Check supabase-config.js.'});
     }
+  }
+  function retrySessionInitialization() {
+    if(!supabaseClient){initializeSupabaseAuth();return;}
+    beginAuthInitializationAttempt();
   }
   async function submitAuthForm(event) {
     event.preventDefault();
@@ -327,6 +361,6 @@
       $('sign-out').disabled=false;
     }
   }
-  function init(){ CATEGORIES.forEach(c=>{const a=document.createElement('option');a.value=c;a.textContent=c;$('food-category').append(a);const b=document.createElement('option');b.value=c;b.textContent=c;$('category-filter').append(b);}); $('today-label').textContent=new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(new Date()); $('add-item-top').onclick=()=>openModal(); $('add-item-quick').onclick=()=>openModal(); $('add-item-inventory').onclick=()=>openModal(); $('load-demo').onclick=loadDemo; $('reset-data').onclick=resetData; $('retry-cloud-load').onclick=retryCloudLoad; $('search-input').addEventListener('input',renderInventory); ['category-filter','status-filter','sort-select'].forEach(id=>$(id).addEventListener('change',renderInventory)); $('item-form').addEventListener('submit',e=>{e.preventDefault();const values=validateForm();if(values)addOrUpdate(values);}); document.querySelectorAll('[data-close-modal]').forEach(el=>el.addEventListener('click',closeModal)); document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();}); document.addEventListener('click',e=>{const button=e.target.closest('[data-action]');if(!button)return;const {action,id}=button.dataset;if(action==='add')openModal();if(action==='edit')openModal(data.active.find(x=>x.id===id));if(action==='delete')deleteItem(id);if(action==='consumed'||action==='wasted')recordOutcome(id,action);}); document.querySelectorAll('a[data-page]').forEach(link=>link.addEventListener('click',e=>{e.preventDefault();navigate(link.dataset.page);})); window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard');}); const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard'); render(); $('auth-form').addEventListener('submit',submitAuthForm); $('auth-mode-toggle').addEventListener('click',()=>setAuthMode(authMode==='signin'?'signup':'signin')); $('sign-out').addEventListener('click',signOut); setAuthMode('signin'); showAuthState({loading:true}); initializeSupabaseAuth(); }
+  function init(){ CATEGORIES.forEach(c=>{const a=document.createElement('option');a.value=c;a.textContent=c;$('food-category').append(a);const b=document.createElement('option');b.value=c;b.textContent=c;$('category-filter').append(b);}); $('today-label').textContent=new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(new Date()); $('add-item-top').onclick=()=>openModal(); $('add-item-quick').onclick=()=>openModal(); $('add-item-inventory').onclick=()=>openModal(); $('load-demo').onclick=loadDemo; $('reset-data').onclick=resetData; $('retry-cloud-load').onclick=()=>retryAction==='session'?retrySessionInitialization():retryCloudLoad(); $('search-input').addEventListener('input',renderInventory); ['category-filter','status-filter','sort-select'].forEach(id=>$(id).addEventListener('change',renderInventory)); $('item-form').addEventListener('submit',e=>{e.preventDefault();const values=validateForm();if(values)addOrUpdate(values);}); document.querySelectorAll('[data-close-modal]').forEach(el=>el.addEventListener('click',closeModal)); document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();}); document.addEventListener('click',e=>{const button=e.target.closest('[data-action]');if(!button)return;const {action,id}=button.dataset;if(action==='add')openModal();if(action==='edit')openModal(data.active.find(x=>x.id===id));if(action==='delete')deleteItem(id);if(action==='consumed'||action==='wasted')recordOutcome(id,action);}); document.querySelectorAll('a[data-page]').forEach(link=>link.addEventListener('click',e=>{e.preventDefault();navigate(link.dataset.page);})); window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard');}); const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard'); render(); $('auth-form').addEventListener('submit',submitAuthForm); $('auth-mode-toggle').addEventListener('click',()=>setAuthMode(authMode==='signin'?'signup':'signin')); $('sign-out').addEventListener('click',signOut); setAuthMode('signin'); showAuthState({loading:true}); initializeSupabaseAuth(); }
   init();
 })();
