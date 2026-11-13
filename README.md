@@ -17,6 +17,8 @@ Food is easy to forget at the back of a fridge or cupboard. FoodWise makes expir
 - Consumed and wasted history, a comparison chart, and estimated waste value where a price was recorded.
 - Realistic demo data and a reset control. Demo data is appended only after confirmation when records already exist.
 - Responsive desktop, tablet, and mobile navigation.
+- English and Thai interface with a language selector; the selected language is remembered in `foodwise-language-v1`.
+- Noodles & Pasta category for instant noodles, other noodles, and pasta.
 - Form validation and browser confirmation for destructive actions.
 
 ## Technologies
@@ -24,7 +26,8 @@ Food is easy to forget at the back of a fridge or cupboard. FoodWise makes expir
 - HTML5
 - CSS3
 - Vanilla JavaScript (no framework or build step)
-- Browser LocalStorage
+- Supabase PostgreSQL for authenticated food inventory and history
+- Browser LocalStorage reserved for the existing, untouched `foodwise-data-v1` source data and Supabase Auth session storage
 - Supabase JavaScript client v2 for email authentication
 
 The page loads DM Sans, Manrope, and Supabase JS v2 from CDNs when an internet connection is available; system fonts remain available as a fallback.
@@ -35,7 +38,7 @@ The page loads DM Sans, Manrope, and Supabase JS v2 from CDNs when an internet c
 2. Add your Supabase Project URL and Publishable key to `supabase-config.js` (see **Supabase email authentication** below).
 3. From this folder, start a local web server: `python -m http.server 8000`.
 4. Open `http://localhost:8000` in a recent version of Chrome, Edge, Firefox, or Safari, then create an account or sign in.
-5. Select **Load demo data** to add realistic sample inventory and try the app sections and item actions.
+5. Select **Load demo data** and confirm to add realistic sample records to the signed-in account's cloud data, then try the app sections and item actions.
 
 No package installation is needed. FoodWise must be opened through localhost or a hosted web origin for authentication redirects and browser requests; do not open `index.html` as a `file://` URL.
 
@@ -45,13 +48,13 @@ No package installation is needed. FoodWise must be opened through localhost or 
 
 Enable email authentication in Supabase Auth and set the local development Site URL/redirect allowlist to the origin you use, such as `http://localhost:8000`. If email confirmation is enabled, new users must follow the confirmation link before signing in. Phone authentication is not enabled by FoodWise.
 
-This phase adds authentication only. Food inventory and history continue using the existing `foodwise-data-v1` LocalStorage behavior; food CRUD and migration to Supabase are not connected yet.
+Food inventory and history are stored in Supabase for the signed-in user. The existing `foodwise-data-v1` value is not loaded, changed, or imported. Local data migration requires a separate, explicit Phase 2B flow and is not implemented here.
 
 ## How LocalStorage works
 
-FoodWise saves records under the browser key `foodwise-data-v1`. Active items and historical outcomes are stored separately. Changes are saved as they happen and restored when the same browser opens the app again. Data stays in that browser profile on that device; it is not synced or sent to a server. Clearing browser site data removes it. Use **Reset all data** to clear FoodWise records from inside the app after confirming.
+Existing records may remain in the browser key `foodwise-data-v1` from the earlier local-only version. Phase 2A does not read, overwrite, delete, or migrate that value. It loads authenticated cloud data only after checking the current Supabase user, and the UI explicitly notes that local data has not been imported. Use **Reset all data** only if you intend to permanently delete the signed-in account's cloud inventory and history; the app asks for confirmation first.
 
-Each active food record contains an ID, name, category, numeric quantity, unit, optional purchase date and price, expiry date, and a status snapshot. The UI derives status from the expiry date each time it renders, so the status remains current as days pass. History records retain a copy of the item, its consumed/wasted outcome, and the date recorded.
+Each active food record contains an ID, name, category, numeric quantity, unit, optional purchase date and price, expiry date, and a status snapshot. The UI derives status from the expiry date each time it renders, so the status remains current as days pass. History records retain a copy of the item, its consumed/wasted outcome, and the date recorded. Category values remain English in Supabase (including `Noodles & Pasta`); the interface translates their display labels according to the selected language. User-entered food names are not translated. The language preference uses a separate `foodwise-language-v1` LocalStorage key; inventory data is not modified by changing languages.
 
 ## Project structure
 
@@ -59,7 +62,8 @@ Each active food record contains an ID, name, category, numeric quantity, unit, 
 foodwise/
 ├── index.html   # App structure and accessible controls
 ├── styles.css   # Responsive visual design
-├── app.js       # Validation, expiry logic, rendering, and LocalStorage
+├── app.js       # Authenticated Supabase data access, validation, and rendering
+├── supabase-config.js # Public Supabase Project URL and Publishable key
 └── README.md    # Setup and project guide
 ```
 
@@ -71,11 +75,11 @@ Expiry dates are parsed as local calendar dates (`year, month, day`) and compare
 
 The requested demonstration scenarios are covered by the built-in controls: add/edit/delete, search/category/status filters, expiry sorting, consumed/wasted actions, summary updates, refresh persistence, empty states, form errors, and responsive breakpoints. Date boundary behavior is derived from the same date-only helper used by dashboard, inventory, and “Use it first.”
 
-Before presenting, open the app at desktop width and at a narrow mobile width; load demo data; inspect all four sections; edit an item; search and filter; mark one item consumed and another wasted; refresh and confirm records remain; then reset data and confirm the empty states. Check a date due today and dates three and four days away if you want to demonstrate status boundaries.
+Before presenting, test in two separate accounts: add, edit, and delete an item; search and filter; mark one item consumed and another wasted; refresh and confirm persistence; then use **Reset all data** only with disposable test-account data. Switch between accounts and confirm each sees only its own records. Test desktop and narrow mobile widths. Check a date due today and dates three and four days away if you want to demonstrate status boundaries. Local migration is intentionally deferred to Phase 2B.
 
 ## Limitations
 
-- Data is local to one browser profile and is not backed up or synchronized.
-- Phase 1 adds email authentication only; inventory CRUD and history still use the existing browser-wide LocalStorage key and are not yet separated by authenticated user. Supabase food storage and migration are future phases.
+- `foodwise-data-v1` is preserved but not imported. Phase 2B must provide a user-confirmed, retry-safe migration before those legacy records are available in the cloud.
+- Food inventory and history require a working network connection and the authenticated Supabase account. The database RLS policies are essential to account isolation.
 - Waste value is an estimate based only on recorded purchase prices for wasted items; missing prices are treated as zero.
 - The comparison chart summarizes recorded item counts, not portion sizes or actual environmental impact.

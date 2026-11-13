@@ -3,8 +3,9 @@
   'use strict';
   const ITEM_COLUMNS='id,user_id,legacy_id,name,category,quantity,unit,purchase_date,expiry_date,price,updated_at,created_at';
   const HISTORY_COLUMNS='id,user_id,food_item_id,legacy_item_id,legacy_record_id,outcome,recorded_at,recorded_date,item_name,item_category,item_quantity,item_unit,item_purchase_date,item_expiry_date,item_price,item_updated_at';
-  const CATEGORIES = ['Fruits', 'Vegetables', 'Meat & Seafood', 'Dairy', 'Beverages', 'Frozen Food', 'Snacks', 'Other'];
-  const ICONS = { Fruits:'🍊', Vegetables:'🥬', 'Meat & Seafood':'🐟', Dairy:'🥛', Beverages:'🧃', 'Frozen Food':'🧊', Snacks:'🥨', Other:'🍽️' };
+  const CATEGORIES = ['Fruits', 'Vegetables', 'Meat & Seafood', 'Dairy', 'Beverages', 'Frozen Food', 'Noodles & Pasta', 'Snacks', 'Other'];
+  const LANGUAGE_STORAGE_KEY='foodwise-language-v1';
+  const ICONS = { Fruits:'🍊', Vegetables:'🥬', 'Meat & Seafood':'🐟', Dairy:'🥛', Beverages:'🧃', 'Frozen Food':'🧊', 'Noodles & Pasta':'🍜', Snacks:'🥨', Other:'🍽️' };
   const $ = (id) => document.getElementById(id);
   const EMAIL_CONFIRMATION_REDIRECT='https://kanthinan.github.io/foodwise/';
   function hasSupabaseAuthCallback() {
@@ -17,10 +18,75 @@
   const parseLocalDate = (value) => { if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return null; const [y,m,d] = value.split('-').map(Number); const date = new Date(y,m-1,d); return date.getFullYear()===y && date.getMonth()===m-1 && date.getDate()===d ? date : null; };
   const daysUntil = (value) => { const target=parseLocalDate(value), today=parseLocalDate(todayKey()); if(!target||!today)return null; return Math.round((target-today)/86400000); };
   const expiryStatus = (item) => { const days=daysUntil(item.expiryDate); return days===null ? 'expired' : days<0 ? 'expired' : days<=3 ? 'soon' : 'fresh'; };
-  const statusText = (item) => { const days=daysUntil(item.expiryDate); if(days===0)return 'Due Today'; if(days<0)return `${Math.abs(days)} day${Math.abs(days)===1?'':'s'} overdue`; if(days===1)return '1 day left'; return `${days} days left`; };
-  const formatDate = (value) => { const d=parseLocalDate(value); return d ? new Intl.DateTimeFormat(undefined,{day:'numeric',month:'short',year:'numeric'}).format(d) : '—'; };
+  const statusText = (item) => { const days=daysUntil(item.expiryDate); if(days===0)return t('Due Today'); if(days<0)return t(Math.abs(days)===1?'{days} day overdue':'{days} days overdue',{days:Math.abs(days)}); if(days===1)return t('1 day left'); return t('{days} days left',{days}); };
+  const formatDate = (value) => { const d=parseLocalDate(value); return d ? new Intl.DateTimeFormat(currentLanguage==='th'?'th-TH':'en-US',{day:'numeric',month:'short',year:'numeric'}).format(d) : '—'; };
   const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const money = (amount) => new Intl.NumberFormat(undefined,{style:'currency',currency:'THB',maximumFractionDigits:2}).format(amount || 0);
+  const THAI_TRANSLATIONS={
+    'Dashboard':'แดชบอร์ด','My inventory':'คลังอาหารของฉัน','Use it first':'ควรใช้ก่อน','Waste summary':'สรุปอาหารที่ทิ้ง',
+    'Sign out':'ออกจากระบบ','Add food':'เพิ่มอาหาร','Good morning':'สวัสดีตอนเช้า','A little planning today means less waste tomorrow.':'วางแผนวันนี้ ลดอาหารเหลือทิ้งในวันหน้า',
+    'Load demo data':'เพิ่มข้อมูลตัวอย่าง','Active items':'รายการอาหาร','in your kitchen':'ในครัวของคุณ','Expiring soon':'ใกล้หมดอายุ','use in the next 3 days':'ควรใช้ภายใน 3 วัน','Expired':'หมดอายุแล้ว','need your attention':'ต้องจัดการ','Consumed':'ใช้แล้ว','items enjoyed so far':'รายการที่ใช้แล้ว',
+    "Don't let it go to waste":'อย่าปล่อยให้อาหารเสีย','Needs your attention':'รายการที่ควรจัดการ','See all':'ดูทั้งหมด','A fresh start':'เริ่มต้นใหม่','What’s in your kitchen today?':'วันนี้ในครัวมีอะไรบ้าง?','Add what you have on hand and we’ll help you keep track.':'เพิ่มรายการอาหาร แล้วเราจะช่วยติดตามให้','Add your first item':'เพิ่มรายการแรก','Eat before it expires. Save food. Save money.':'กินก่อนหมดอายุ ลดอาหารเหลือทิ้ง ประหยัดเงิน','FoodWise helps you make the most of every ingredient.':'FoodWise ช่วยให้คุณใช้วัตถุดิบทุกอย่างได้คุ้มค่า',
+    'Everything you have, all in one place.':'รวมอาหารทั้งหมดของคุณไว้ในที่เดียว','Search food':'ค้นหาอาหาร','All categories':'ทุกหมวดหมู่','All statuses':'ทุกสถานะ','Fresh':'สดใหม่','Name A–Z':'ชื่อตามลำดับ A–Z','Soonest expiry':'หมดอายุเร็วที่สุด','Latest expiry':'หมดอายุช้าที่สุด','Food':'อาหาร','Quantity':'จำนวน','Category':'หมวดหมู่','Expires':'วันหมดอายุ','Status':'สถานะ','Actions':'การดำเนินการ','Bought':'ซื้อเมื่อ','Waste':'ทิ้ง','Edit':'แก้ไข','Delete':'ลบ',
+    'Your soonest-expiring ingredients, right at the top.':'รายการใกล้หมดอายุจะแสดงไว้ด้านบน','Due Today':'ครบกำหนดวันนี้','{days} day overdue':'เลยกำหนด {days} วัน','{days} days overdue':'เลยกำหนด {days} วัน','1 day left':'เหลือ 1 วัน','{days} days left':'เหลือ {days} วัน','expires':'หมดอายุ','Mark consumed':'ทำเครื่องหมายว่าใช้แล้ว',
+    'Every meal made and ingredient saved tells a story.':'ทุกมื้อและวัตถุดิบที่ช่วยรักษามีเรื่องราว','A quick look':'ภาพรวม','Consumed vs. wasted':'ใช้แล้วเทียบกับทิ้ง','Estimated waste value':'มูลค่าอาหารที่ทิ้งโดยประมาณ','Based on purchase prices you’ve recorded for wasted items.':'คำนวณจากราคาซื้อที่บันทึกไว้สำหรับอาหารที่ทิ้ง','Every little bit counts.':'ทุกความพยายามมีความหมาย','The full story':'รายละเอียดทั้งหมด','Item history':'ประวัติอาหาร',
+    'Make it count':'ทุกอย่างมีความหมาย','Keep your kitchen in the know.':'ติดตามอาหารในครัวของคุณ','Food name':'ชื่ออาหาร','Unit':'หน่วย','Choose unit':'เลือกหน่วย','pcs':'ชิ้น','kg':'กก.','g':'ก.','L':'ลิตร','ml':'มล.','packs':'แพ็ก','bunches':'กำ','boxes':'กล่อง','servings':'ที่','bag':'ถุง','cups':'ถ้วย','box':'กล่อง','pack':'แพ็ก','Expires on':'วันหมดอายุ','Purchase date':'วันที่ซื้อ','optional':'ไม่บังคับ','Purchase price':'ราคาซื้อ','Cancel':'ยกเลิก','Add to inventory':'เพิ่มในคลังอาหาร','Edit food':'แก้ไขอาหาร','Save changes':'บันทึกการแก้ไข',
+    'Email address':'อีเมล','Password':'รหัสผ่าน','Welcome back':'ยินดีต้อนรับกลับ','Sign in to continue to FoodWise.':'เข้าสู่ระบบเพื่อใช้งาน FoodWise ต่อ','Sign in':'เข้าสู่ระบบ','Create your account':'สร้างบัญชีของคุณ','Start keeping track of your kitchen.':'เริ่มติดตามอาหารในครัวของคุณ','Create account':'สร้างบัญชี','Already have an account?':'มีบัญชีอยู่แล้ว?','New to FoodWise?':'เพิ่งใช้ FoodWise?','Create an account':'สร้างบัญชี','Need another confirmation email?':'ต้องการอีเมลยืนยันอีกครั้ง?','Resend confirmation email':'ส่งอีเมลยืนยันอีกครั้ง','Phone sign-in is disabled until SMS setup is complete.':'ยังไม่เปิดใช้การเข้าสู่ระบบด้วยโทรศัพท์จนกว่าจะตั้งค่า SMS เสร็จ',
+    'Checking your session…':'กำลังตรวจสอบเซสชัน','Try Again':'ลองอีกครั้ง','Retry loading data':'ลองโหลดข้อมูลอีกครั้ง','Sending…':'กำลังส่ง…','Signing out…':'กำลังออกจากระบบ…','Refreshing your FoodWise data…':'กำลังโหลดข้อมูล FoodWise ใหม่…','Verifying your account and loading your food data…':'กำลังตรวจสอบบัญชีและโหลดข้อมูลอาหาร…',
+    'Looking good!':'ดีมาก!','Nothing needs your attention right now.':'ตอนนี้ไม่มีรายการที่ต้องจัดการ','No matching food':'ไม่พบอาหารที่ตรงกัน','Your inventory is ready for a fresh start':'คลังอาหารของคุณพร้อมเริ่มต้น','Try a different search or filter.':'ลองเปลี่ยนคำค้นหาหรือตัวกรอง','Add what you have at home and FoodWise will help you keep track.':'เพิ่มอาหารที่มีอยู่ แล้ว FoodWise จะช่วยติดตามให้','Nothing on the shelf yet':'ยังไม่มีอาหารในรายการ','Add food to see what you should use first.':'เพิ่มอาหารเพื่อดูว่าควรใช้รายการใดก่อน','Your story starts here':'เรื่องราวของคุณเริ่มที่นี่','Mark food as consumed or wasted to build your summary.':'ทำเครื่องหมายว่าใช้แล้วหรือทิ้ง เพื่อสร้างสรุปของคุณ','No history yet':'ยังไม่มีประวัติ','Consumed and wasted items will appear here.':'รายการที่ใช้แล้วและทิ้งจะแสดงที่นี่',
+    'Please enter a food name.':'กรอกชื่ออาหาร','Choose a category.':'เลือกหมวดหมู่','Quantity must be greater than zero.':'จำนวนต้องมากกว่าศูนย์','Choose a unit.':'เลือกหน่วย','Enter a valid expiration date.':'กรอกวันหมดอายุที่ถูกต้อง','Enter a valid purchase date.':'กรอกวันที่ซื้อที่ถูกต้อง','Price must be zero or more.':'ราคาต้องเป็นศูนย์หรือมากกว่า','Enter a valid email address.':'กรอกอีเมลที่ถูกต้อง','Enter your password.':'กรอกรหัสผ่าน','Enter the email address you used to register.':'กรอกอีเมลที่ใช้ลงทะเบียน',
+    'Added to your inventory.':'เพิ่มอาหารในคลังแล้ว','Food item updated.':'อัปเดตรายการอาหารแล้ว','Food item deleted.':'ลบรายการอาหารแล้ว','Choose a valid food outcome.':'เลือกสถานะอาหารที่ถูกต้อง','Account created. Opening FoodWise…':'สร้างบัญชีแล้ว กำลังเปิด FoodWise…','Check your email for the confirmation link, then return here to sign in.':'ตรวจสอบอีเมลเพื่อยืนยัน แล้วกลับมาเข้าสู่ระบบ','Signed in. Opening FoodWise…':'เข้าสู่ระบบแล้ว กำลังเปิด FoodWise…','Confirmation email requested':'ส่งคำขออีเมลยืนยันแล้ว','Too many confirmation requests. Please wait a few minutes before trying again.':'ส่งคำขอยืนยันบ่อยเกินไป กรุณารอสักครู่ก่อนลองอีกครั้ง','Your account inventory and history have been reset.':'รีเซ็ตคลังอาหารและประวัติของบัญชีแล้ว','Demo items added to your account.':'เพิ่มรายการตัวอย่างในบัญชีแล้ว',
+    'Could not load your cloud data.':'โหลดข้อมูลบนคลาวด์ไม่สำเร็จ','Could not add this food item.':'เพิ่มอาหารไม่สำเร็จ','Could not save this food item.':'บันทึกอาหารไม่สำเร็จ','Could not delete this food item.':'ลบอาหารไม่สำเร็จ','Could not restore your session. Check your connection and try again.':'กู้คืนเซสชันไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง','Could not sign out. Please try again.':'ออกจากระบบไม่สำเร็จ โปรดลองอีกครั้ง','Your session has expired. Please sign in again.':'เซสชันหมดอายุแล้ว กรุณาเข้าสู่ระบบอีกครั้ง','Your session has ended. Please sign in again.':'เซสชันสิ้นสุดแล้ว กรุณาเข้าสู่ระบบอีกครั้ง','Could not confirm your session. Sign in again.':'ยืนยันเซสชันไม่สำเร็จ กรุณาเข้าสู่ระบบอีกครั้ง','FoodWise is still loading your account data. Please try again.':'FoodWise กำลังโหลดข้อมูลบัญชี โปรดลองอีกครั้ง','The change was saved, but FoodWise could not refresh your data. Retry the cloud load.':'บันทึกแล้ว แต่โหลดข้อมูลใหม่ไม่สำเร็จ โปรดลองอีกครั้ง','An error occurred. Please try again.':'เกิดข้อผิดพลาด โปรดลองอีกครั้ง','Please check your connection and try again.':'ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง','Your session could not be verified. Please sign in again.':'ยืนยันเซสชันไม่สำเร็จ กรุณาเข้าสู่ระบบอีกครั้ง',
+    'Fruits':'ผลไม้','Vegetables':'ผัก','Meat & Seafood':'เนื้อสัตว์และอาหารทะเล','Dairy':'ผลิตภัณฑ์นม','Beverages':'เครื่องดื่ม','Frozen Food':'อาหารแช่แข็ง','Noodles & Pasta':'บะหมี่และอาหารประเภทเส้น','Snacks':'ขนมขบเคี้ยว','Other':'อื่น ๆ',
+    'Wasted':'ทิ้งแล้ว','items':'รายการ','Language':'ภาษา','Language preference could not be saved.':'บันทึกภาษาที่เลือกไม่สำเร็จ','Eat before it expires':'กินก่อนหมดอายุ',
+    'YOUR KITCHEN, YOURS':'ครัวของคุณ','FoodWise dashboard':'แดชบอร์ด FoodWise','Main navigation':'เมนูหลัก','A little less waste goes a long way.':'ลดอาหารเหลือทิ้งทีละน้อย ก็ช่วยโลกได้มาก','Small choices in your kitchen add up to a better planet.':'การเลือกเล็ก ๆ ในครัวช่วยให้โลกดีขึ้น','Made for mindful kitchens':'สร้างสรรค์เพื่อครัวที่ใส่ใจ','Your previous browser inventory remains untouched. It is not loaded into this account; local data migration is not available in this phase.':'ข้อมูลอาหารเดิมในเบราว์เซอร์ยังคงอยู่ ข้อมูลนี้ไม่ได้ถูกโหลดเข้าบัญชี และยังไม่มีการย้ายข้อมูลในระยะนี้','Inventory overview':'ภาพรวมคลังอาหาร','Filter by category':'กรองตามหมวดหมู่','Filter by status':'กรองตามสถานะ','Sort inventory':'เรียงคลังอาหาร','Reset all data':'รีเซ็ตข้อมูลทั้งหมด','Close':'ปิด','e.g. Avocados':'เช่น อะโวคาโด','e.g. 3':'เช่น 3','e.g. 89':'เช่น 89',
+    '{name} marked as {outcome}.':'ทำเครื่องหมาย {name} ว่า{outcome}','FoodWise':'FoodWise',
+    'You are about to permanently delete {name} from your cloud inventory. This will not add it to history.':'คุณกำลังจะลบ {name} ออกจากคลังบนคลาวด์อย่างถาวร รายการนี้จะไม่ถูกเพิ่มในประวัติ',
+    'Add the FoodWise demo items to this signed-in account in Supabase? These sample records will be visible in your cloud inventory.':'เพิ่มข้อมูลตัวอย่าง FoodWise ในบัญชี Supabase ที่เข้าสู่ระบบอยู่หรือไม่ รายการตัวอย่างจะปรากฏในคลังอาหารบนคลาวด์',
+    'Permanently delete all food inventory and history from this signed-in account in Supabase? This cannot be undone.':'ลบคลังอาหารและประวัติทั้งหมดจากบัญชี Supabase นี้อย่างถาวรหรือไม่ การดำเนินการนี้ไม่สามารถย้อนกลับได้',
+    'FoodWise could not finish checking your session within 15 seconds. Check your connection and try again.':'FoodWise ตรวจสอบเซสชันไม่สำเร็จภายใน 15 วินาที ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง',
+    'Could not load your account data. Please try again.':'โหลดข้อมูลบัญชีไม่สำเร็จ โปรดลองอีกครั้ง','The item was not found in your account. Refresh and try again.':'ไม่พบรายการนี้ในบัญชีของคุณ โหลดข้อมูลใหม่แล้วลองอีกครั้ง',
+    'Configuration error':'การตั้งค่ามีข้อผิดพลาด','Add your Supabase Project URL and Publishable key to supabase-config.js to enable email authentication.':'เพิ่ม Supabase Project URL และ Publishable key ใน supabase-config.js เพื่อเปิดใช้การยืนยันตัวตนทางอีเมล',
+    'The Supabase JavaScript client could not load. Check your connection and reload the page.':'โหลดไคลเอนต์ Supabase ไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วโหลดหน้าใหม่','FoodWise could not initialize Supabase authentication. Check supabase-config.js.':'เริ่มการยืนยันตัวตน Supabase ไม่สำเร็จ ตรวจสอบ supabase-config.js',
+    'Your email or password was not accepted. Check your details and try again.':'อีเมลหรือรหัสผ่านไม่ถูกต้อง ตรวจสอบข้อมูลแล้วลองอีกครั้ง','Could not resend the confirmation email. Check your connection and try again.':'ส่งอีเมลยืนยันไม่สำเร็จ ตรวจสอบการเชื่อมต่อแล้วลองอีกครั้ง',
+    'Confirmation email requested for {email}. Check your inbox and spam folder.':'ส่งคำขออีเมลยืนยันไปยัง {email} แล้ว ตรวจสอบกล่องจดหมายและสแปม',
+    'Invalid login credentials':'อีเมลหรือรหัสผ่านไม่ถูกต้อง','Email not confirmed':'กรุณายืนยันอีเมลก่อนเข้าสู่ระบบ',
+    'YOUR KITCHEN, AT A GLANCE':'ครัวของคุณในภาพรวม','DON\'T LET IT GO TO WASTE':'อย่าปล่อยให้อาหารเสีย','A FRESH START':'เริ่มต้นใหม่','YOUR KITCHEN':'ครัวของคุณ','A LITTLE HEAD START':'เริ่มจัดการก่อน','YOUR FOOD JOURNEY':'เส้นทางอาหารของคุณ','A QUICK LOOK':'ภาพรวม','ESTIMATED WASTE VALUE':'มูลค่าอาหารที่ทิ้งโดยประมาณ','THE FULL STORY':'รายละเอียดทั้งหมด','MAKE IT COUNT':'ทุกอย่างมีความหมาย','WORKSPACE':'เมนูหลัก','Settings':'ตั้งค่า'
+  };
+  let currentLanguage='en';
+  function t(key,values={}) { let text=currentLanguage==='th'?(THAI_TRANSLATIONS[key]||key):key; return text.replace(/\{(\w+)\}/g,(_,name)=>String(values[name]??'')); }
+  function categoryLabel(category) { return escapeHtml(t(category)); }
+  function localizeMessage(message) {
+    if(currentLanguage==='en')return message;
+    if(THAI_TRANSLATIONS[message])return t(message);
+    const emailRequest=message.match(/^Confirmation email requested for (.+)\. Check your inbox and spam folder\.$/);
+    if(emailRequest)return t('Confirmation email requested for {email}. Check your inbox and spam folder.',{email:emailRequest[1]});
+    const outcome=message.match(/^(.+) marked as (consumed|wasted)\.$/);
+    if(outcome)return t('{name} marked as {outcome}.',{name:outcome[1],outcome:t(outcome[2]==='consumed'?'Consumed':'Wasted')});
+    if(/rate.?limit|too many requests|security purposes/i.test(message))return t('Too many confirmation requests. Please wait a few minutes before trying again.');
+    return t('An error occurred. Please try again.');
+  }
+  function setLocalizedText(element,key,kind='text') { element.dataset.i18nText=key; element.dataset.i18nKind=kind; element.textContent=kind==='message'?localizeMessage(key):t(key); }
+  function readLanguage() { try { const saved=localStorage.getItem(LANGUAGE_STORAGE_KEY); return saved==='th'?'th':'en'; } catch { return 'en'; } }
+  function applyLanguage() {
+    document.documentElement.lang=currentLanguage;
+    document.querySelectorAll('[data-i18n]').forEach(el=>{el.textContent=t(el.dataset.i18n);});
+    document.querySelectorAll('[data-i18n-button]').forEach(el=>{el.innerHTML=`${escapeHtml(t(el.dataset.i18nButton))} <span>→</span>`;});
+    document.querySelectorAll('[data-i18n-html]').forEach(el=>{el.textContent=t(el.dataset.i18nHtml);});
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{el.placeholder=t(el.dataset.i18nPlaceholder);});
+    document.querySelectorAll('[data-i18n-aria-label]').forEach(el=>{el.setAttribute('aria-label',t(el.dataset.i18nAriaLabel));});
+    document.querySelectorAll('[data-i18n-text]').forEach(el=>{el.textContent=el.dataset.i18nKind==='message'?localizeMessage(el.dataset.i18nText):t(el.dataset.i18nText);});
+    document.querySelectorAll('.language-switcher').forEach(select=>{select.value=currentLanguage;select.setAttribute('aria-label',t('Language'));});
+    document.querySelectorAll('#food-category option, #category-filter option').forEach(option=>{if(CATEGORIES.includes(option.value))option.textContent=t(option.value);});
+    document.title=`FoodWise — ${t('Eat before it expires')}`;
+    $('today-label').textContent=new Intl.DateTimeFormat(currentLanguage==='th'?'th-TH':'en-US',{weekday:'long',month:'long',day:'numeric'}).format(new Date());
+  }
+  function setLanguage(language,persist=true) {
+    currentLanguage=language==='th'?'th':'en';
+    if(persist){try{localStorage.setItem(LANGUAGE_STORAGE_KEY,currentLanguage);}catch{showToast(t('Language preference could not be saved.'),'error');}}
+    applyLanguage();
+    render();
+  }
+  const money = (amount) => new Intl.NumberFormat(currentLanguage==='th'?'th-TH':'en-US',{style:'currency',currency:'THB',maximumFractionDigits:2}).format(amount || 0);
   const makeId = () => globalThis.crypto?.randomUUID ? crypto.randomUUID() : `fw-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   let data={active:[],history:[]};
   let supabaseClient=null;
@@ -84,33 +150,33 @@
     return true;
   }
   async function showDataError(error,fallback) { if(await handleExpiredSession(error))return; showToast(error?.message||fallback,'error'); }
-  function showToast(message,type='success') { const toast=document.createElement('div'); toast.className=`toast ${type==='error'?'error':''}`; toast.textContent=message; $('toast-region').append(toast); setTimeout(()=>toast.remove(),3200); }
-  function statusPill(item) { const status=expiryStatus(item), label=status==='fresh'?'Fresh':status==='soon'?statusText(item):'Expired'; return `<span class="status-pill status-${status}">${label}</span>`; }
+  function showToast(message,type='success') { const toast=document.createElement('div'); toast.className=`toast ${type==='error'?'error':''}`; setLocalizedText(toast,message,'message'); $('toast-region').append(toast); setTimeout(()=>toast.remove(),4200); }
+  function statusPill(item) { const status=expiryStatus(item),label=status==='fresh'?t('Fresh'):status==='soon'?statusText(item):t('Expired'); return `<span class="status-pill status-${status}">${escapeHtml(label)}</span>`; }
   function itemIcon(item) { return ICONS[item.category] || '🍽️'; }
   function sortItems(items) { const mode=$('sort-select').value; return [...items].sort((a,b)=>mode==='name-asc'?a.name.localeCompare(b.name):mode==='expiry-desc'?b.expiryDate.localeCompare(a.expiryDate):a.expiryDate.localeCompare(b.expiryDate)); }
-  function emptyState(title,description,button=false) { return `<div class="empty-state"><div class="empty-illustration">✿</div><h3>${title}</h3><p>${description}</p>${button?'<button class="button button-primary" data-action="add">＋ Add food</button>':''}</div>`; }
+  function emptyState(title,description,button=false) { return `<div class="empty-state"><div class="empty-illustration">✿</div><h3>${escapeHtml(t(title))}</h3><p>${escapeHtml(t(description))}</p>${button?`<button class="button button-primary" data-action="add">＋ ${escapeHtml(t('Add food'))}</button>`:''}</div>`; }
   function renderDashboard() {
     const active=data.active, statuses=active.map(expiryStatus), attention=active.filter(x=>expiryStatus(x)!=='fresh').sort((a,b)=>a.expiryDate.localeCompare(b.expiryDate));
     $('stat-active').textContent=active.length; $('stat-soon').textContent=statuses.filter(x=>x==='soon').length; $('stat-expired').textContent=statuses.filter(x=>x==='expired').length; $('stat-consumed').textContent=data.history.filter(x=>x.outcome==='consumed').length; $('nav-count').textContent=active.length; $('attention-count').textContent=attention.length;
-    $('attention-list').innerHTML=attention.length?attention.slice(0,4).map(item=>`<div class="attention-row"><div class="food-avatar">${itemIcon(item)}</div><div class="food-main"><div class="food-name">${escapeHtml(item.name)}</div><div class="food-meta">${escapeHtml(item.quantity)} ${escapeHtml(item.unit)} · ${escapeHtml(item.category)}</div></div><span class="attention-days ${expiryStatus(item)==='expired'?'expired':''}">${escapeHtml(statusText(item))}</span><div class="row-actions"><button class="icon-button" data-action="consumed" data-id="${escapeHtml(item.id)}" title="Mark consumed">✓</button></div></div>`).join(''):emptyState('Looking good!','Nothing needs your attention right now.');
+    $('attention-list').innerHTML=attention.length?attention.slice(0,4).map(item=>`<div class="attention-row"><div class="food-avatar">${itemIcon(item)}</div><div class="food-main"><div class="food-name">${escapeHtml(item.name)}</div><div class="food-meta">${escapeHtml(item.quantity)} ${escapeHtml(t(item.unit))} · ${categoryLabel(item.category)}</div></div><span class="attention-days ${expiryStatus(item)==='expired'?'expired':''}">${escapeHtml(statusText(item))}</span><div class="row-actions"><button class="icon-button" data-action="consumed" data-id="${escapeHtml(item.id)}" title="${escapeHtml(t('Mark consumed'))}">✓</button></div></div>`).join(''):emptyState('Looking good!','Nothing needs your attention right now.');
   }
   function renderInventory() {
     const q=$('search-input').value.trim().toLowerCase(), cat=$('category-filter').value, stat=$('status-filter').value;
-    const items=sortItems(data.active.filter(item=>(!q||item.name.toLowerCase().includes(q))&&(!cat||item.category===cat)&&(!stat||expiryStatus(item)===stat)));
-    $('inventory-list').innerHTML=items.length?`<table class="inventory-table"><thead><tr><th>Food</th><th>Quantity</th><th>Category</th><th>Expires</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${items.map(item=>`<tr><td><div class="item-cell"><div class="food-avatar">${itemIcon(item)}</div><div><div class="food-name">${escapeHtml(item.name)}</div><div class="food-meta">${item.purchaseDate?`Bought ${formatDate(item.purchaseDate)}`:''}</div></div></div></td><td>${escapeHtml(item.quantity)} ${escapeHtml(item.unit)}</td><td>${escapeHtml(item.category)}</td><td>${formatDate(item.expiryDate)}</td><td>${statusPill(item)}</td><td><div class="table-actions"><button class="icon-button" data-action="consumed" data-id="${escapeHtml(item.id)}" title="Mark consumed">✓</button><button class="icon-button" data-action="wasted" data-id="${escapeHtml(item.id)}" title="Mark wasted">Waste</button><button class="icon-button" data-action="edit" data-id="${escapeHtml(item.id)}" title="Edit">Edit</button><button class="icon-button" data-action="delete" data-id="${escapeHtml(item.id)}" title="Delete">×</button></div></td></tr>`).join('')}</tbody></table>`:emptyState(data.active.length?'No matching food':'Your inventory is ready for a fresh start',data.active.length?'Try a different search or filter.':'Add what you have at home and FoodWise will help you keep track.',!data.active.length);
+    const items=sortItems(data.active.filter(item=>(!q||item.name.toLowerCase().includes(q)||item.category.toLowerCase().includes(q)||(THAI_TRANSLATIONS[item.category]||'').toLowerCase().includes(q))&&(!cat||item.category===cat)&&(!stat||expiryStatus(item)===stat)));
+    $('inventory-list').innerHTML=items.length?`<table class="inventory-table"><thead><tr><th>${t('Food')}</th><th>${t('Quantity')}</th><th>${t('Category')}</th><th>${t('Expires')}</th><th>${t('Status')}</th><th><span class="sr-only">${t('Actions')}</span></th></tr></thead><tbody>${items.map(item=>`<tr><td><div class="item-cell"><div class="food-avatar">${itemIcon(item)}</div><div><div class="food-name">${escapeHtml(item.name)}</div><div class="food-meta">${item.purchaseDate?`${t('Bought')} ${formatDate(item.purchaseDate)}`:''}</div></div></div></td><td>${escapeHtml(item.quantity)} ${escapeHtml(t(item.unit))}</td><td>${categoryLabel(item.category)}</td><td>${formatDate(item.expiryDate)}</td><td>${statusPill(item)}</td><td><div class="table-actions"><button class="icon-button" data-action="consumed" data-id="${escapeHtml(item.id)}" title="${escapeHtml(t('Mark consumed'))}">✓</button><button class="icon-button" data-action="wasted" data-id="${escapeHtml(item.id)}" title="${escapeHtml(t('Waste'))}">${t('Waste')}</button><button class="icon-button" data-action="edit" data-id="${escapeHtml(item.id)}" title="${escapeHtml(t('Edit'))}">${t('Edit')}</button><button class="icon-button" data-action="delete" data-id="${escapeHtml(item.id)}" title="${escapeHtml(t('Delete'))}">×</button></div></td></tr>`).join('')}</tbody></table>`:emptyState(data.active.length?'No matching food':'Your inventory is ready for a fresh start',data.active.length?'Try a different search or filter.':'Add what you have at home and FoodWise will help you keep track.',!data.active.length);
   }
-  function renderUseFirst() { const items=[...data.active].sort((a,b)=>a.expiryDate.localeCompare(b.expiryDate)); $('use-first-list').innerHTML=items.length?items.map(item=>`<article class="use-card"><div class="food-avatar">${itemIcon(item)}</div><div class="food-main"><div class="food-name">${escapeHtml(item.name)}</div><div class="food-meta">${escapeHtml(item.quantity)} ${escapeHtml(item.unit)} · ${escapeHtml(item.category)}</div><div class="use-date">${escapeHtml(statusText(item))} · expires ${formatDate(item.expiryDate)}</div><button class="icon-button" data-action="consumed" data-id="${escapeHtml(item.id)}">✓ Mark consumed</button></div>${statusPill(item)}</article>`).join(''):emptyState('Nothing on the shelf yet','Add food to see what you should use first.',true); }
+  function renderUseFirst() { const items=[...data.active].sort((a,b)=>a.expiryDate.localeCompare(b.expiryDate)); $('use-first-list').innerHTML=items.length?items.map(item=>`<article class="use-card"><div class="food-avatar">${itemIcon(item)}</div><div class="food-main"><div class="food-name">${escapeHtml(item.name)}</div><div class="food-meta">${escapeHtml(item.quantity)} ${escapeHtml(t(item.unit))} · ${categoryLabel(item.category)}</div><div class="use-date">${escapeHtml(statusText(item))} · ${t('expires')} ${formatDate(item.expiryDate)}</div><button class="icon-button" data-action="consumed" data-id="${escapeHtml(item.id)}">✓ ${t('Mark consumed')}</button></div>${statusPill(item)}</article>`).join(''):emptyState('Nothing on the shelf yet','Add food to see what you should use first.',true); }
   function renderHistory() {
     const consumed=data.history.filter(x=>x.outcome==='consumed'), wasted=data.history.filter(x=>x.outcome==='wasted'), total=consumed.length+wasted.length, angle=total?Math.round(consumed.length/total*360):0, value=wasted.reduce((sum,x)=>sum+(Number(x.item.price)||0),0);
-    $('chart-area').innerHTML=total?`<div class="donut" style="--consumed-angle:${angle}deg"><div class="donut-center">${total}<small>items</small></div></div><div class="chart-legend"><div class="legend-row"><span class="legend-label"><i class="legend-dot"></i> Consumed</span><strong>${consumed.length}</strong></div><div class="legend-row"><span class="legend-label"><i class="legend-dot wasted"></i> Wasted</span><strong>${wasted.length}</strong></div></div>`:emptyState('Your story starts here','Mark food as consumed or wasted to build your summary.');
+    $('chart-area').innerHTML=total?`<div class="donut" style="--consumed-angle:${angle}deg"><div class="donut-center">${total}<small>${t('items')}</small></div></div><div class="chart-legend"><div class="legend-row"><span class="legend-label"><i class="legend-dot"></i> ${t('Consumed')}</span><strong>${consumed.length}</strong></div><div class="legend-row"><span class="legend-label"><i class="legend-dot wasted"></i> ${t('Wasted')}</span><strong>${wasted.length}</strong></div></div>`:emptyState('Your story starts here','Mark food as consumed or wasted to build your summary.');
     $('waste-value').textContent=money(value); const rows=[...data.history].sort((a,b)=>String(b.recordedAt).localeCompare(String(a.recordedAt)));
-    $('history-list').innerHTML=rows.length?rows.map(x=>`<div class="history-row"><div class="food-avatar">${itemIcon(x.item)}</div><div class="food-main"><div class="food-name">${escapeHtml(x.item.name)}</div><div class="food-meta">${escapeHtml(x.item.quantity)} ${escapeHtml(x.item.unit)} · ${escapeHtml(x.item.category)}</div></div><span class="history-badge ${x.outcome}">${x.outcome==='consumed'?'✓ Consumed':'Wasted'}</span><span class="history-date">${formatDate(x.recordedDate)}</span></div>`).join(''):emptyState('No history yet','Consumed and wasted items will appear here.');
+    $('history-list').innerHTML=rows.length?rows.map(x=>`<div class="history-row"><div class="food-avatar">${itemIcon(x.item)}</div><div class="food-main"><div class="food-name">${escapeHtml(x.item.name)}</div><div class="food-meta">${escapeHtml(x.item.quantity)} ${escapeHtml(t(x.item.unit))} · ${categoryLabel(x.item.category)}</div></div><span class="history-badge ${x.outcome}">${x.outcome==='consumed'?`✓ ${t('Consumed')}`:t('Wasted')}</span><span class="history-date">${formatDate(x.recordedDate)}</span></div>`).join(''):emptyState('No history yet','Consumed and wasted items will appear here.');
   }
   function render() { renderDashboard(); renderInventory(); renderUseFirst(); renderHistory(); }
   function navigate(page) { const target=$(`page-${page}`); if(!target)return; document.querySelectorAll('.page').forEach(el=>el.classList.remove('active')); target.classList.add('active'); document.querySelectorAll('.nav-link').forEach(el=>el.classList.toggle('active',el.dataset.page===page)); if(!authCallbackPending&&location.hash!==`#${page}`)history.replaceState(null,'',`#${page}`); window.scrollTo(0,0); }
-  function openModal(item) { const form=$('item-form'); form.reset(); document.querySelectorAll('.field').forEach(x=>x.classList.remove('invalid')); document.querySelectorAll('.field-error').forEach(x=>x.textContent=''); $('item-id').value=item?.id||''; $('modal-title').textContent=item?'Edit food':'Add food'; $('save-item').innerHTML=item?'Save changes <span>→</span>':'Add to inventory <span>→</span>'; if(item){$('food-name').value=item.name;$('food-category').value=item.category;$('food-quantity').value=item.quantity;$('food-unit').value=item.unit;$('food-expiry').value=item.expiryDate;$('food-purchase-date').value=item.purchaseDate||'';$('food-price').value=item.price??'';} $('item-modal').classList.add('open'); $('item-modal').setAttribute('aria-hidden','false'); setTimeout(()=>$('food-name').focus(),50); }
+  function openModal(item) { const form=$('item-form'); form.reset(); document.querySelectorAll('.field').forEach(x=>x.classList.remove('invalid')); document.querySelectorAll('.field-error').forEach(e=>{e.textContent='';delete e.dataset.i18nText;delete e.dataset.i18nKind;}); $('item-id').value=item?.id||''; $('modal-title').dataset.i18n=item?'Edit food':'Add food'; $('modal-title').textContent=t($('modal-title').dataset.i18n); $('save-item').dataset.i18nButton=item?'Save changes':'Add to inventory'; $('save-item').innerHTML=`${escapeHtml(t($('save-item').dataset.i18nButton))} <span>→</span>`; if(item){$('food-name').value=item.name;$('food-category').value=item.category;$('food-quantity').value=item.quantity;$('food-unit').value=item.unit;$('food-expiry').value=item.expiryDate;$('food-purchase-date').value=item.purchaseDate||'';$('food-price').value=item.price??'';} $('item-modal').classList.add('open'); $('item-modal').setAttribute('aria-hidden','false'); setTimeout(()=>$('food-name').focus(),50); }
   function closeModal(){ $('item-modal').classList.remove('open'); $('item-modal').setAttribute('aria-hidden','true'); }
-  function validateForm() { const values={name:$('food-name').value.trim(),category:$('food-category').value,quantity:$('food-quantity').value,unit:$('food-unit').value,expiryDate:$('food-expiry').value,purchaseDate:$('food-purchase-date').value,price:$('food-price').value}; const errors={}; if(!values.name)errors.name='Please enter a food name.'; if(!CATEGORIES.includes(values.category))errors.category='Choose a category.'; if(!Number.isFinite(Number(values.quantity))||Number(values.quantity)<=0)errors.quantity='Quantity must be greater than zero.'; if(!values.unit)errors.unit='Choose a unit.'; if(!parseLocalDate(values.expiryDate))errors.expiryDate='Enter a valid expiration date.'; if(values.purchaseDate&&!parseLocalDate(values.purchaseDate))errors.purchaseDate='Enter a valid purchase date.'; if(values.price!==''&&(!Number.isFinite(Number(values.price))||Number(values.price)<0))errors.price='Price must be zero or more.'; document.querySelectorAll('.field').forEach(f=>f.classList.remove('invalid')); document.querySelectorAll('.field-error').forEach(e=>e.textContent=''); Object.entries(errors).forEach(([key,message])=>{const input=document.querySelector(`[name="${key}"]`); if(input){input.closest('.field').classList.add('invalid'); const err=document.querySelector(`[data-error="${key}"]`); if(err)err.textContent=message;}}); return Object.keys(errors).length?null:values; }
+  function validateForm() { const values={name:$('food-name').value.trim(),category:$('food-category').value,quantity:$('food-quantity').value,unit:$('food-unit').value,expiryDate:$('food-expiry').value,purchaseDate:$('food-purchase-date').value,price:$('food-price').value}; const errors={}; if(!values.name)errors.name='Please enter a food name.'; if(!CATEGORIES.includes(values.category))errors.category='Choose a category.'; if(!Number.isFinite(Number(values.quantity))||Number(values.quantity)<=0)errors.quantity='Quantity must be greater than zero.'; if(!values.unit)errors.unit='Choose a unit.'; if(!parseLocalDate(values.expiryDate))errors.expiryDate='Enter a valid expiration date.'; if(values.purchaseDate&&!parseLocalDate(values.purchaseDate))errors.purchaseDate='Enter a valid purchase date.'; if(values.price!==''&&(!Number.isFinite(Number(values.price))||Number(values.price)<0))errors.price='Price must be zero or more.'; document.querySelectorAll('.field').forEach(f=>f.classList.remove('invalid')); document.querySelectorAll('.field-error').forEach(e=>{e.textContent='';delete e.dataset.i18nText;delete e.dataset.i18nKind;}); Object.entries(errors).forEach(([key,message])=>{const input=document.querySelector(`[name="${key}"]`); if(input){input.closest('.field').classList.add('invalid'); const err=document.querySelector(`[data-error="${key}"]`); if(err)setLocalizedText(err,message);}}); return Object.keys(errors).length?null:values; }
   async function addOrUpdate(values) {
     if(dataState!=='ready'||!currentUserId){showToast('FoodWise is still loading your account data. Please try again.','error');return;}
     const userId=currentUserId,generation=authGeneration,id=$('item-id').value,payload=itemPayload(values);
@@ -139,19 +205,19 @@
   async function deleteItem(id) {
     if(dataState!=='ready'||!currentUserId)return;
     const item=data.active.find(x=>x.id===id); if(!item)return;
-    if(!confirm(`Permanently delete ${item.name} from your cloud inventory? This will not add it to history.`))return;
+    if(!confirm(t('You are about to permanently delete {name} from your cloud inventory. This will not add it to history.',{name:item.name})))return;
     const userId=currentUserId,generation=authGeneration;
     try {
       const {data:deleted,error}=await supabaseClient.from('food_items').delete().eq('id',id).eq('user_id',userId).select('id').single();
       if(error)throw error;
-      if(!deleted)throw new Error('This item was not found in your account. Refresh and try again.');
+      if(!deleted)throw new Error('The item was not found in your account. Refresh and try again.');
       if(!currentRequest(userId,generation))return;
       data={...data,active:data.active.filter(row=>row.id!==id)}; render(); showToast('Food item deleted.');
     } catch(error) { if(currentRequest(userId,generation)){await refreshAccountData(userId,generation);await showDataError(error,'Could not delete this food item.');} }
   }
   async function loadDemo() {
     if(dataState!=='ready'||!currentUserId)return;
-    if(!confirm('Add the FoodWise demo items to this signed-in account in Supabase? These sample records will be visible in your cloud inventory.'))return;
+    if(!confirm(t('Add the FoodWise demo items to this signed-in account in Supabase? These sample records will be visible in your cloud inventory.')))return;
     const userId=currentUserId,generation=authGeneration,today=parseLocalDate(todayKey()),offset=n=>{const d=new Date(today);d.setDate(d.getDate()+n);return dateInput(d);};
     const samples=[['Baby spinach','Vegetables',1,'bag',0,49],['Greek yogurt','Dairy',2,'cups',2,65],['Strawberries','Fruits',1,'box',3,89],['Chicken breast','Meat & Seafood',500,'g',5,135],['Oat milk','Beverages',1,'L',10,79],['Frozen peas','Frozen Food',1,'pack',40,55]];
     const activeRows=samples.map(([name,category,quantity,unit,days,price])=>({user_id:userId,name,category,quantity,unit,purchase_date:offset(-2),expiry_date:offset(days),price,updated_at:new Date().toISOString()}));
@@ -165,7 +231,7 @@
   }
   async function resetData() {
     if(!currentUserId||dataState!=='ready')return;
-    if(!confirm('Permanently delete all food inventory and history from this signed-in account in Supabase? This cannot be undone.'))return;
+    if(!confirm(t('Permanently delete all food inventory and history from this signed-in account in Supabase? This cannot be undone.')))return;
     const userId=currentUserId,generation=authGeneration;
     try {
       const {error:itemsError}=await supabaseClient.from('food_items').delete().eq('user_id',userId); if(itemsError)throw itemsError;
@@ -179,33 +245,34 @@
     app.hidden=true;
     $('auth-screen').hidden=false;
     $('auth-loading').hidden=!loading;
-    $('auth-loading-message').textContent=loadingMessage;
+    setLocalizedText($('auth-loading-message'),loadingMessage,'message');
     $('auth-form-panel').hidden=loading||configurationError;
     $('auth-message').hidden=!message;
-    $('auth-message').textContent=message;
+    if(message)setLocalizedText($('auth-message'),message,'message');else{$('auth-message').textContent='';delete $('auth-message').dataset.i18nText;}
     $('auth-error').hidden=!error;
-    $('auth-error').textContent=error;
+    if(error)setLocalizedText($('auth-error'),error,'message');else{$('auth-error').textContent='';delete $('auth-error').dataset.i18nText;}
     retryAction=nextRetryAction||(retry?'cloud':null);
     $('retry-cloud-load').hidden=!retryAction;
-    $('retry-cloud-load').textContent=retryLabel||(retryAction==='session'?'Try Again':'Retry loading data');
+    const retryText=retryLabel||(retryAction==='session'?'Try Again':'Retry loading data');
+    setLocalizedText($('retry-cloud-load'),retryText);
   }
   function setAuthMode(mode) {
     authMode=mode;
     const signingUp=mode==='signup';
-    $('auth-title').textContent=signingUp?'Create your account':'Welcome back';
-    $('auth-description').textContent=signingUp?'Start keeping track of your kitchen.':'Sign in to continue to FoodWise.';
-    $('auth-submit').innerHTML=signingUp?'Create account <span>→</span>':'Sign in <span>→</span>';
-    $('auth-switch-copy').textContent=signingUp?'Already have an account?':'New to FoodWise?';
-    $('auth-mode-toggle').textContent=signingUp?'Sign in':'Create an account';
+    $('auth-title').dataset.i18n=signingUp?'Create your account':'Welcome back'; $('auth-title').textContent=t($('auth-title').dataset.i18n);
+    $('auth-description').dataset.i18n=signingUp?'Start keeping track of your kitchen.':'Sign in to continue to FoodWise.'; $('auth-description').textContent=t($('auth-description').dataset.i18n);
+    $('auth-submit').dataset.i18nButton=signingUp?'Create account':'Sign in'; $('auth-submit').innerHTML=`${escapeHtml(t($('auth-submit').dataset.i18nButton))} <span>→</span>`;
+    $('auth-switch-copy').dataset.i18n=signingUp?'Already have an account?':'New to FoodWise?'; $('auth-switch-copy').textContent=t($('auth-switch-copy').dataset.i18n);
+    $('auth-mode-toggle').dataset.i18n=signingUp?'Sign in':'Create an account'; $('auth-mode-toggle').textContent=t($('auth-mode-toggle').dataset.i18n);
     $('auth-password').autocomplete=signingUp?'new-password':'current-password';
     $('auth-resend-line').hidden=signingUp;
     showAuthState();
   }
   function showAuthFeedback({message='',error=''}={}) {
     $('auth-message').hidden=!message;
-    $('auth-message').textContent=message;
+    if(message)setLocalizedText($('auth-message'),message,'message');else{$('auth-message').textContent='';delete $('auth-message').dataset.i18nText;}
     $('auth-error').hidden=!error;
-    $('auth-error').textContent=error;
+    if(error)setLocalizedText($('auth-error'),error,'message');else{$('auth-error').textContent='';delete $('auth-error').dataset.i18nText;}
   }
   async function resendConfirmationEmail() {
     if(!supabaseClient||authMode!=='signin')return;
@@ -217,7 +284,7 @@
     }
     const button=$('resend-confirmation');
     button.disabled=true;
-    button.textContent='Sending…';
+    button.dataset.i18n='Sending…'; button.textContent=t(button.dataset.i18n);
     $('auth-mode-toggle').disabled=true;
     try {
       const {error}=await supabaseClient.auth.resend({type:'signup',email,options:{emailRedirectTo:EMAIL_CONFIRMATION_REDIRECT}});
@@ -226,10 +293,10 @@
     } catch(error) {
       const detail=error?.message||'';
       const rateLimited=error?.status===429||/rate.?limit|too many requests|security purposes/i.test(detail);
-      showAuthFeedback({error:rateLimited?'Too many confirmation requests. Please wait a few minutes before trying again.':`Could not resend the confirmation email${detail?`: ${detail}`:'. Check your connection and try again.'}`});
+      showAuthFeedback({error:rateLimited?'Too many confirmation requests. Please wait a few minutes before trying again.':'Could not resend the confirmation email. Check your connection and try again.'});
     } finally {
       button.disabled=false;
-      button.textContent='Resend confirmation email';
+      button.dataset.i18n='Resend confirmation email'; button.textContent=t(button.dataset.i18n);
       $('auth-mode-toggle').disabled=false;
     }
   }
@@ -394,7 +461,14 @@
       $('sign-out').disabled=false;
     }
   }
-  function init(){ CATEGORIES.forEach(c=>{const a=document.createElement('option');a.value=c;a.textContent=c;$('food-category').append(a);const b=document.createElement('option');b.value=c;b.textContent=c;$('category-filter').append(b);}); $('today-label').textContent=new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(new Date()); $('add-item-top').onclick=()=>openModal(); $('add-item-quick').onclick=()=>openModal(); $('add-item-inventory').onclick=()=>openModal(); $('load-demo').onclick=loadDemo; $('reset-data').onclick=resetData; $('retry-cloud-load').onclick=()=>retryAction==='session'?retrySessionInitialization():retryCloudLoad(); $('search-input').addEventListener('input',renderInventory); ['category-filter','status-filter','sort-select'].forEach(id=>$(id).addEventListener('change',renderInventory)); $('item-form').addEventListener('submit',e=>{e.preventDefault();const values=validateForm();if(values)addOrUpdate(values);}); document.querySelectorAll('[data-close-modal]').forEach(el=>el.addEventListener('click',closeModal)); document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();}); document.addEventListener('click',e=>{const button=e.target.closest('[data-action]');if(!button)return;const {action,id}=button.dataset;if(action==='add')openModal();if(action==='edit')openModal(data.active.find(x=>x.id===id));if(action==='delete')deleteItem(id);if(action==='consumed'||action==='wasted')recordOutcome(id,action);}); document.querySelectorAll('a[data-page]').forEach(link=>link.addEventListener('click',e=>{e.preventDefault();navigate(link.dataset.page);})); window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard');}); const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard'); render(); $('auth-form').addEventListener('submit',submitAuthForm); $('auth-mode-toggle').addEventListener('click',()=>setAuthMode(authMode==='signin'?'signup':'signin')); $('sign-out').addEventListener('click',signOut); setAuthMode('signin'); showAuthState({loading:true}); initializeSupabaseAuth(); }
+  function init(){
+    currentLanguage=readLanguage();
+    CATEGORIES.forEach(category=>{const optionLabel=t(category),formOption=document.createElement('option'),filterOption=document.createElement('option');formOption.value=category;formOption.textContent=optionLabel;$('food-category').append(formOption);filterOption.value=category;filterOption.textContent=optionLabel;$('category-filter').append(filterOption);});
+    document.querySelectorAll('.language-switcher').forEach(select=>select.addEventListener('change',()=>setLanguage(select.value)));
+    $('add-item-top').onclick=()=>openModal(); $('add-item-quick').onclick=()=>openModal(); $('add-item-inventory').onclick=()=>openModal(); $('load-demo').onclick=loadDemo; $('reset-data').onclick=resetData; $('retry-cloud-load').onclick=()=>retryAction==='session'?retrySessionInitialization():retryCloudLoad(); $('search-input').addEventListener('input',renderInventory); ['category-filter','status-filter','sort-select'].forEach(id=>$(id).addEventListener('change',renderInventory)); $('item-form').addEventListener('submit',e=>{e.preventDefault();const values=validateForm();if(values)addOrUpdate(values);}); document.querySelectorAll('[data-close-modal]').forEach(el=>el.addEventListener('click',closeModal)); document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();}); document.addEventListener('click',e=>{const button=e.target.closest('[data-action]');if(!button)return;const {action,id}=button.dataset;if(action==='add')openModal();if(action==='edit')openModal(data.active.find(x=>x.id===id));if(action==='delete')deleteItem(id);if(action==='consumed'||action==='wasted')recordOutcome(id,action);}); document.querySelectorAll('a[data-page]').forEach(link=>link.addEventListener('click',e=>{e.preventDefault();navigate(link.dataset.page);})); window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard');});
+    applyLanguage();
+    const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard'); render(); $('auth-form').addEventListener('submit',submitAuthForm); $('auth-mode-toggle').addEventListener('click',()=>setAuthMode(authMode==='signin'?'signup':'signin')); $('sign-out').addEventListener('click',signOut); setAuthMode('signin'); showAuthState({loading:true}); initializeSupabaseAuth();
+  }
   init();
   $('resend-confirmation').addEventListener('click',resendConfirmationEmail);
 })();
