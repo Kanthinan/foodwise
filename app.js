@@ -198,7 +198,40 @@
     $('auth-switch-copy').textContent=signingUp?'Already have an account?':'New to FoodWise?';
     $('auth-mode-toggle').textContent=signingUp?'Sign in':'Create an account';
     $('auth-password').autocomplete=signingUp?'new-password':'current-password';
+    $('auth-resend-line').hidden=signingUp;
     showAuthState();
+  }
+  function showAuthFeedback({message='',error=''}={}) {
+    $('auth-message').hidden=!message;
+    $('auth-message').textContent=message;
+    $('auth-error').hidden=!error;
+    $('auth-error').textContent=error;
+  }
+  async function resendConfirmationEmail() {
+    if(!supabaseClient||authMode!=='signin')return;
+    const email=$('auth-email').value.trim();
+    if(!email||!$('auth-email').validity.valid) {
+      showAuthFeedback({error:'Enter the email address you used to register.'});
+      $('auth-email').focus();
+      return;
+    }
+    const button=$('resend-confirmation');
+    button.disabled=true;
+    button.textContent='Sending…';
+    $('auth-mode-toggle').disabled=true;
+    try {
+      const {error}=await supabaseClient.auth.resend({type:'signup',email,options:{emailRedirectTo:EMAIL_CONFIRMATION_REDIRECT}});
+      if(error)throw error;
+      showAuthFeedback({message:`Confirmation email requested for ${email}. Check your inbox and spam folder.`});
+    } catch(error) {
+      const detail=error?.message||'';
+      const rateLimited=error?.status===429||/rate.?limit|too many requests|security purposes/i.test(detail);
+      showAuthFeedback({error:rateLimited?'Too many confirmation requests. Please wait a few minutes before trying again.':`Could not resend the confirmation email${detail?`: ${detail}`:'. Check your connection and try again.'}`});
+    } finally {
+      button.disabled=false;
+      button.textContent='Resend confirmation email';
+      $('auth-mode-toggle').disabled=false;
+    }
   }
   function completeAuthInitializationAttempt() {
     if(!authInitializationPending)return;
@@ -363,4 +396,5 @@
   }
   function init(){ CATEGORIES.forEach(c=>{const a=document.createElement('option');a.value=c;a.textContent=c;$('food-category').append(a);const b=document.createElement('option');b.value=c;b.textContent=c;$('category-filter').append(b);}); $('today-label').textContent=new Intl.DateTimeFormat(undefined,{weekday:'long',month:'long',day:'numeric'}).format(new Date()); $('add-item-top').onclick=()=>openModal(); $('add-item-quick').onclick=()=>openModal(); $('add-item-inventory').onclick=()=>openModal(); $('load-demo').onclick=loadDemo; $('reset-data').onclick=resetData; $('retry-cloud-load').onclick=()=>retryAction==='session'?retrySessionInitialization():retryCloudLoad(); $('search-input').addEventListener('input',renderInventory); ['category-filter','status-filter','sort-select'].forEach(id=>$(id).addEventListener('change',renderInventory)); $('item-form').addEventListener('submit',e=>{e.preventDefault();const values=validateForm();if(values)addOrUpdate(values);}); document.querySelectorAll('[data-close-modal]').forEach(el=>el.addEventListener('click',closeModal)); document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();}); document.addEventListener('click',e=>{const button=e.target.closest('[data-action]');if(!button)return;const {action,id}=button.dataset;if(action==='add')openModal();if(action==='edit')openModal(data.active.find(x=>x.id===id));if(action==='delete')deleteItem(id);if(action==='consumed'||action==='wasted')recordOutcome(id,action);}); document.querySelectorAll('a[data-page]').forEach(link=>link.addEventListener('click',e=>{e.preventDefault();navigate(link.dataset.page);})); window.addEventListener('hashchange',()=>{const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard');}); const page=location.hash.slice(1);navigate(['dashboard','inventory','use-first','history'].includes(page)?page:'dashboard'); render(); $('auth-form').addEventListener('submit',submitAuthForm); $('auth-mode-toggle').addEventListener('click',()=>setAuthMode(authMode==='signin'?'signup':'signin')); $('sign-out').addEventListener('click',signOut); setAuthMode('signin'); showAuthState({loading:true}); initializeSupabaseAuth(); }
   init();
+  $('resend-confirmation').addEventListener('click',resendConfirmationEmail);
 })();
