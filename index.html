@@ -14,7 +14,7 @@
   <main id="auth-screen" class="auth-screen" aria-live="polite">
     <section class="auth-card" aria-labelledby="auth-title">
       <a class="brand auth-brand" href="#" aria-label="FoodWise"><span class="brand-mark">f</span><span>foodwise<span class="brand-dot">.</span></span></a>
-      <div id="auth-loading" class="auth-state"><span class="auth-spinner" aria-hidden="true"></span><span>Checking your session…</span></div>
+      <div id="auth-loading" class="auth-state"><span class="auth-spinner" aria-hidden="true"></span><span id="auth-loading-message">Checking your session…</span></div>
       <div id="auth-form-panel" hidden>
         <div class="eyebrow">YOUR KITCHEN, YOURS</div>
         <h1 id="auth-title">Welcome back</h1>
@@ -29,6 +29,7 @@
       </div>
       <p id="auth-message" class="auth-message" role="status" hidden></p>
       <p id="auth-error" class="auth-error" role="alert" hidden></p>
+      <button id="retry-cloud-load" class="button button-quiet auth-submit" type="button" hidden>Retry loading data</button>
     </section>
   </main>
   <div class="app-shell" hidden>
@@ -45,7 +46,7 @@
     </aside>
     <main class="main-content">
       <header class="topbar"><div class="mobile-brand"><span class="brand-mark">f</span> foodwise<span class="brand-dot">.</span></div><div class="topbar-date" id="today-label"></div><span id="auth-user-label" class="auth-user-label"></span><button class="button button-quiet sign-out-button" id="sign-out" type="button">Sign out</button><button class="button button-primary" id="add-item-top"><span>＋</span> Add food</button></header>
-      <div id="local-data-notice" class="local-data-notice" role="status" hidden>Your local inventory is temporarily unavailable because its account ownership has not been established. The original browser data is preserved and has not been changed.</div>
+      <div id="local-data-notice" class="local-data-notice" role="status" hidden>Your previous browser inventory remains untouched. It is not loaded into this account; local data migration is not available in this phase.</div>
       <div id="page-dashboard" class="page active">
         <section class="welcome-row"><div><div class="eyebrow"><span class="eyebrow-dot"></span> YOUR KITCHEN, AT A GLANCE</div><h1>Good morning<span class="title-leaf">✳</span></h1><p class="subtitle">A little planning today means less waste tomorrow.</p></div><button class="text-button" id="load-demo">✦ Load demo data</button></section>
         <section class="stats-grid" aria-label="Inventory overview">
